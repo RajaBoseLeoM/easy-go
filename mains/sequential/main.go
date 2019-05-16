@@ -19,6 +19,8 @@ func main() {
 	writerDur := flag.Int("w", 25, "write time taken for single frame")
 	totFrames := flag.Int("d", 10, "total no of frames")
 
+	flag.Parse()
+
 	// Encoding
 	e := encoder.NewEncoder(int32(*encodeDur), int32(*totFrames))
 	frameNo := int32(1)
