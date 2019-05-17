@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	"github.com/RealImage/easy-go/encoder"
@@ -22,44 +23,44 @@ func main() {
 	flag.Parse()
 
 	// Encoding
-	e := encoder.NewEncoder(int32(*encodeDur), int32(*totFrames))
-	frameNo := int32(1)
+	e := encoder.NewEncoder(time.Millisecond*time.Duration(*encodeDur), *totFrames)
+	encryptCh := make(chan int, *totFrames)
 	for {
+		frameNo, err := e.Encode()
 		fmt.Printf("Processing frame %v for encoding\n", frameNo)
-		err := e.Encode(frameNo)
 		if err == io.EOF {
 			fmt.Println("Encoding complete")
+			close(encryptCh)
 			break
+		} else if err != nil {
+			log.Fatalf("failed to encode frame: %v\n", frameNo)
 		}
-		frameNo++
+		encryptCh <- frameNo
 	}
 
 	// Encrypting
-	en := encryptor.NewEncryptor(int32(*encryptDur), int32(*totFrames))
-	frameNo = int32(1)
-	for {
+	en := encryptor.NewEncryptor(time.Millisecond * time.Duration(*encryptDur))
+	writerCh := make(chan int, *totFrames)
+	for frameNo := range encryptCh {
 		fmt.Printf("Processing frame %v for encryption\n", frameNo)
-		err := en.Encrypt(frameNo)
-		if err == io.EOF {
-			fmt.Println("Encryption complete")
-			break
+		eFrame, err := en.Encrypt(frameNo)
+		if err != nil {
+			log.Fatalf("failed to encrypt frame: %v\n", eFrame)
 		}
-		frameNo++
+		writerCh <- eFrame
 	}
+	close(writerCh)
 
 	// Writing
-	w := writer.NewWriter(int32(*writerDur), int32(*totFrames))
-	frameNo = int32(1)
-	for {
+	w := writer.NewWriter(time.Millisecond * time.Duration(*writerDur))
+	for frameNo := range writerCh {
 		fmt.Printf("Processing frame %v for writing\n", frameNo)
 		err := w.Write(frameNo)
-		if err == io.EOF {
-			fmt.Println("Writing complete")
-			break
+		if err != nil {
+			log.Fatalf("failed to write frame: %v\n", frameNo)
 		}
-		frameNo++
 	}
 
 	elapsed := time.Since(start)
-	fmt.Printf("Encoding took %v\n", elapsed)
+	fmt.Printf("Sequencial encoding, encryption and writing took %v\n", elapsed)
 }

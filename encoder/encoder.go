@@ -6,22 +6,24 @@ import (
 )
 
 type fakeEncoder struct {
-	singleFrameEncodingTimeInMs int32
-	totalFrames                 int32
+	singleFrameEncodingTimeInMs time.Duration
+	totalFrames                 int
+	curFrameNo                  int
 }
 
-func NewEncoder(singleFrameEncodingTimeInMs int32, totalFrames int32) *fakeEncoder {
+func NewEncoder(singleFrameEncodingTimeInMs time.Duration, totalFrames int) *fakeEncoder {
 	return &fakeEncoder{
 		singleFrameEncodingTimeInMs: singleFrameEncodingTimeInMs,
 		totalFrames:                 totalFrames,
 	}
 }
 
-func (f *fakeEncoder) Encode(frameNo int32) error {
-	time.Sleep(time.Millisecond * time.Duration(f.singleFrameEncodingTimeInMs))
-	if frameNo == f.totalFrames {
-		return io.EOF
+func (f *fakeEncoder) Encode() (int, error) {
+	time.Sleep(f.singleFrameEncodingTimeInMs)
+	if f.curFrameNo == f.totalFrames {
+		return f.curFrameNo, io.EOF
 	}
+	f.curFrameNo++
 
-	return nil
+	return f.curFrameNo, nil
 }

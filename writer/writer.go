@@ -1,27 +1,21 @@
 package writer
 
 import (
-	"io"
 	"time"
 )
 
 type fakeWriter struct {
-	singleFrameWritingTimeInMs int32
-	totalFrames                int32
+	singleFrameWritingTimeInMs time.Duration
 }
 
-func NewWriter(singleFrameWritingTimeInMs int32, totalFrames int32) *fakeWriter {
+func NewWriter(singleFrameWritingTimeInMs time.Duration) *fakeWriter {
 	return &fakeWriter{
 		singleFrameWritingTimeInMs: singleFrameWritingTimeInMs,
-		totalFrames:                totalFrames,
 	}
 }
 
-func (f *fakeWriter) Write(frameNo int32) error {
-	time.Sleep(time.Millisecond * time.Duration(f.singleFrameWritingTimeInMs))
-	if frameNo == f.totalFrames {
-		return io.EOF
-	}
+func (f *fakeWriter) Write(frameNo int) error {
+	time.Sleep(f.singleFrameWritingTimeInMs)
 
 	return nil
 }

@@ -1,27 +1,21 @@
 package encryptor
 
 import (
-	"io"
 	"time"
 )
 
 type fakeEncryptor struct {
-	singleFrameEncryptionTimeInMs int32
-	totalFrames                   int32
+	singleFrameEncryptionTimeInMs time.Duration
 }
 
-func NewEncryptor(singleFrameEncryptionTimeInMs int32, totalFrames int32) *fakeEncryptor {
+func NewEncryptor(singleFrameEncryptionTimeInMs time.Duration) *fakeEncryptor {
 	return &fakeEncryptor{
 		singleFrameEncryptionTimeInMs: singleFrameEncryptionTimeInMs,
-		totalFrames:                   totalFrames,
 	}
 }
 
-func (f *fakeEncryptor) Encrypt(frameNo int32) error {
-	time.Sleep(time.Millisecond * time.Duration(f.singleFrameEncryptionTimeInMs))
-	if frameNo == f.totalFrames {
-		return io.EOF
-	}
+func (f *fakeEncryptor) Encrypt(frameNo int) (int, error) {
+	time.Sleep(f.singleFrameEncryptionTimeInMs)
 
-	return nil
+	return frameNo, nil
 }

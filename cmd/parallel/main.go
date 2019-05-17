@@ -45,7 +45,7 @@ func main() {
 	writerCh := make(chan int32, *totFrames)
 	ok := false
 	exitEncryption := false
-	for {
+	for /*i := 0; i < *totFrames; i++*/ {
 		select {
 		case frameNo, ok = <-encryptCh:
 			if ok {
