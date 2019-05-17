@@ -29,7 +29,7 @@ func main() {
 		frameNo, err := e.Encode()
 		fmt.Printf("Processing frame %v for encoding\n", frameNo)
 		if err == io.EOF {
-			fmt.Println("Encoding complete")
+			fmt.Println("Encoding completed")
 			close(encryptCh)
 			break
 		} else if err != nil {
@@ -50,6 +50,7 @@ func main() {
 		writerCh <- eFrame
 	}
 	close(writerCh)
+	fmt.Println("Encryption completed")
 
 	// Writing
 	w := writer.NewWriter(time.Millisecond * time.Duration(*writerDur))

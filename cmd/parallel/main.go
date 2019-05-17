@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	"github.com/RealImage/easy-go/encoder"
@@ -21,76 +22,75 @@ func main() {
 	flag.Parse()
 
 	// Encoding
-	e := encoder.NewEncoder(int32(*encodeDur), int32(*totFrames))
-	exitEncodeCh := make(chan bool)
-	encryptCh := make(chan int32, *totFrames)
-	frameNo := int32(1)
+	e := encoder.NewEncoder(time.Millisecond*time.Duration(*encodeDur), *totFrames)
+	encryptCh := make(chan int, *totFrames)
 	for i := 0; i < *totFrames; i++ {
-		go func(frameNo int32) {
+		go func() {
+			frameNo, err := e.Encode()
 			fmt.Printf("Processing frame %v for encoding\n", frameNo)
-			err := e.Encode(frameNo)
-			encryptCh <- frameNo
 			if err == io.EOF {
 				fmt.Printf("\nEncoding complete\n")
-				exitEncodeCh <- true
-				close(encryptCh)
+			} else if err != nil {
+				log.Fatalf("failed to encode for frame: %v\n", frameNo)
 			}
-		}(frameNo)
-		frameNo++
+			encryptCh <- frameNo
+		}()
 	}
 
 	// Encrypting
-	en := encryptor.NewEncryptor(int32(*encryptDur), int32(*totFrames))
-	exitEncryptCh := make(chan bool)
-	writerCh := make(chan int32, *totFrames)
-	ok := false
-	exitEncryption := false
-	for /*i := 0; i < *totFrames; i++*/ {
+	en := encryptor.NewEncryptor(time.Millisecond * time.Duration(*encryptDur))
+	writerCh := make(chan int, *totFrames)
+	currentEncryptionCount := 0
+	for {
 		select {
-		case frameNo, ok = <-encryptCh:
+		case frameNo, ok := <-encryptCh:
 			if ok {
-				go func(frameNo int32) {
+				go func(frameNo int) {
 					fmt.Printf("\nProcessing frame %v for encryption\n", frameNo)
-					err := en.Encrypt(frameNo)
-					writerCh <- frameNo
-					if err == io.EOF {
-						fmt.Printf("\nEncryption complete\n")
-						exitEncryption = true
-						exitEncryptCh <- true
-						close(writerCh)
+					eFrame, err := en.Encrypt(frameNo)
+					if err != nil {
+						log.Fatalf("failed to encrypt frame: %v\n", frameNo)
 					}
+					writerCh <- eFrame
 				}(frameNo)
+				currentEncryptionCount++
+				if currentEncryptionCount == *totFrames {
+					close(encryptCh)
+				}
 			} else {
 				fmt.Printf("\nProcessed all frames for encryption!\n")
-				exitEncryption = true
-				exitEncryptCh <- true
 			}
 		default:
 			fmt.Print("Waiting for frames to encrypt\r")
 			time.Sleep(1 * time.Millisecond)
 		}
-		if exitEncryption {
+		if currentEncryptionCount == *totFrames {
 			break
 		}
 	}
+	fmt.Printf("\nEncryption complete\n")
 
 	// Writing
-	w := writer.NewWriter(int32(*writerDur), int32(*totFrames))
+	w := writer.NewWriter(time.Millisecond * time.Duration(*writerDur))
 	exitWriter := false
-	expectedFrameNo := int32(1)
+	expectedFrameNo := 1
 	for {
 		select {
-		case frameNo, ok = <-writerCh:
+		case frameNo, ok := <-writerCh:
 			if ok {
+				// FIXME: Instead sorting might be a better approach
 				if expectedFrameNo != frameNo {
 					writerCh <- frameNo
 					break
 				}
 				fmt.Printf("\nProcessing frame %v for writing\n", frameNo)
 				err := w.Write(frameNo)
-				if err == io.EOF {
-					fmt.Printf("\nWrite complete\n")
-					exitWriter = true
+				if err != nil {
+					log.Fatalf("failed to write frame: %v\n", frameNo)
+				}
+				if expectedFrameNo == *totFrames {
+					close(writerCh)
+					break
 				}
 				expectedFrameNo++
 			} else {
@@ -105,10 +105,8 @@ func main() {
 			break
 		}
 	}
-
-	<-exitEncodeCh
-	<-exitEncryptCh
+	fmt.Printf("\nWrite complete\n")
 
 	elapsed := time.Since(start)
-	fmt.Printf("Encoding/Encryption took %v\n", elapsed)
+	fmt.Printf("Time taken to Encoding & Encryption in parallel along with sequencial writing is %v\n", elapsed)
 }
