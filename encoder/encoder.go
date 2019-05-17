@@ -2,6 +2,7 @@ package encoder
 
 import (
 	"io"
+	"sync"
 	"time"
 )
 
@@ -9,6 +10,7 @@ type fakeEncoder struct {
 	singleFrameEncodingTimeInMs time.Duration
 	totalFrames                 int
 	curFrameNo                  int
+	m                           sync.Mutex
 }
 
 func NewEncoder(singleFrameEncodingTimeInMs time.Duration, totalFrames int) *fakeEncoder {
@@ -20,6 +22,10 @@ func NewEncoder(singleFrameEncodingTimeInMs time.Duration, totalFrames int) *fak
 
 func (f *fakeEncoder) Encode() (int, error) {
 	time.Sleep(f.singleFrameEncodingTimeInMs)
+
+	f.m.Lock()
+	defer f.m.Unlock()
+
 	if f.curFrameNo == f.totalFrames {
 		return f.curFrameNo, io.EOF
 	}

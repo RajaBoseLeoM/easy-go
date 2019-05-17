@@ -41,69 +41,50 @@ func main() {
 	en := encryptor.NewEncryptor(time.Millisecond * time.Duration(*encryptDur))
 	writerCh := make(chan int, *totFrames)
 	currentEncryptionCount := 0
-	for {
-		select {
-		case frameNo, ok := <-encryptCh:
-			if ok {
-				go func(frameNo int) {
-					fmt.Printf("\nProcessing frame %v for encryption\n", frameNo)
-					eFrame, err := en.Encrypt(frameNo)
-					if err != nil {
-						log.Fatalf("failed to encrypt frame: %v\n", frameNo)
-					}
-					writerCh <- eFrame
-				}(frameNo)
-				currentEncryptionCount++
-				if currentEncryptionCount == *totFrames {
-					close(encryptCh)
-				}
-			} else {
-				fmt.Printf("\nProcessed all frames for encryption!\n")
+	for frameNo := range encryptCh {
+		go func(frameNo int) {
+			fmt.Printf("\nProcessing frame %v for encryption\n", frameNo)
+			eFrame, err := en.Encrypt(frameNo)
+			if err != nil {
+				log.Fatalf("failed to encrypt frame: %v\n", frameNo)
 			}
-		default:
-			fmt.Print("Waiting for frames to encrypt\r")
-			time.Sleep(1 * time.Millisecond)
-		}
+			writerCh <- eFrame
+		}(frameNo)
+		currentEncryptionCount++
 		if currentEncryptionCount == *totFrames {
-			break
+			close(encryptCh)
 		}
 	}
 	fmt.Printf("\nEncryption complete\n")
 
 	// Writing
 	w := writer.NewWriter(time.Millisecond * time.Duration(*writerDur))
-	exitWriter := false
 	expectedFrameNo := 1
+	doneWriting := false
 	for {
-		select {
-		case frameNo, ok := <-writerCh:
-			if ok {
-				// FIXME: Instead sorting might be a better approach
-				if expectedFrameNo != frameNo {
-					writerCh <- frameNo
-					break
-				}
-				fmt.Printf("\nProcessing frame %v for writing\n", frameNo)
-				err := w.Write(frameNo)
-				if err != nil {
-					log.Fatalf("failed to write frame: %v\n", frameNo)
-				}
-				if expectedFrameNo == *totFrames {
-					close(writerCh)
-					break
-				}
-				expectedFrameNo++
-			} else {
-				fmt.Printf("\nProcessed all frames for writing\n")
-				exitWriter = true
+		frameNo, ok := <-writerCh
+		if !ok {
+			if !doneWriting {
+				time.Sleep(1 * time.Millisecond)
+				continue
 			}
-		default:
-			fmt.Print("Waiting for frames to write\r")
-			time.Sleep(1 * time.Millisecond)
-		}
-		if exitWriter {
 			break
 		}
+		// FIXME: Instead sorting might be a better approach
+		if expectedFrameNo != frameNo {
+			writerCh <- frameNo
+			continue
+		}
+		fmt.Printf("\nProcessing frame %v for writing\n", frameNo)
+		err := w.Write(frameNo)
+		if err != nil {
+			log.Fatalf("failed to write frame: %v\n", frameNo)
+		}
+		if expectedFrameNo == *totFrames {
+			close(writerCh)
+			doneWriting = true
+		}
+		expectedFrameNo++
 	}
 	fmt.Printf("\nWrite complete\n")
 
